@@ -13,7 +13,7 @@ import System.IO
 import Control.Monad.IO.Class
 
 main :: IO ()
-main = saveMidi "/test2.midi"
+main = saveMidi "C:/Users/i5-32/Desktop/midi/test10.midi"
 
 saveMidi :: String -> IO ()
 saveMidi s = midiFileIO s (\h -> B.hPut h (B.pack testMidi ))
@@ -34,6 +34,16 @@ fromWord32be w = [ fromIntegral (w `shiftR` 24)
     , fromIntegral w
     ]
 
+toWord28be :: Int -> [Word8]
+toWord28be w =
+    if w <= 0x0FFFFFFF then [ fromIntegral (w `shiftR` 21)
+    , fromIntegral (w `shiftR` 14 .&. 0b01111111)
+    , fromIntegral (w `shiftR` 7 .&. 0b01111111)
+    , fromIntegral (w .&. 0b01111111)
+    ]
+    else [0b11111111, 0b11111111, 0b11111111, 0b01111111]
+    -- else error "you wrong"
+
 fromWord24be :: Word32 -> [Word8]
 fromWord24be w = [
     fromIntegral (w `shiftR` 16)
@@ -48,6 +58,10 @@ fromWord16be w = [fromIntegral (w `shiftR` 8)
 
 fromInt :: Int -> Word8
 fromInt i = fromIntegral i :: Word8
+
+fromInts :: Int -> [Word8]
+fromInts i = fromWord16be (fromIntegral i :: Word16)
+
 
 putWords :: Handle -> (a -> [Word8]) -> a -> IO ()
 putWords h f a = B.hPut h $ B.pack (f a)
@@ -65,21 +79,28 @@ midiIO h t = do
     putWords h fromWord16be 1
     putWords h fromWord16be 96
 ----track------------------------------
-    beforeData <- hTell h
     B.hPut h "MTrk"
-    insert <- hTell h
+    beforeData <- hTell h
     B.hPut h "dd"
     t h
     afterData <- hTell h
-    let dataSize = fromIntegral (afterData - beforeData - 8)
-    hSeek h AbsoluteSeek insert
+    let dataSize = fromIntegral (afterData - beforeData - 4)
+    hSeek h AbsoluteSeek beforeData
     putWords h fromWord16be dataSize
 
 -- permutativeMidi :: Int -> B.ByteString
 -- permutativeMidi =
 
+vlq :: Int -> [Word8]
+vlq i = let b = toWord28be $ fromIntegral i in
+            let b' = dropWhile (== 0x00) b in 
+            case length b' of
+            0 -> [0]
+            1 -> b'
+            _ -> head b' + 0b10000000 : drop 1 b'
+
 event :: Int -> [Word8] -> [Word8]
-event i a = fromInt (i * 0x80) : a
+event i a = vlq (i * 0x80) ++ a
 
 data Note =
     ON Int
@@ -88,25 +109,25 @@ data Note =
 note :: Note -> [Word8]
 note i =
     case i of
-        ON a -> [fromInt 0x90, fromInt (48 + a), fromInt 64]
-        OFF a -> [fromInt 0x80, fromInt (48 + a), fromInt 64]
+        ON a -> [fromInt 0x90, fromInt (72 + a), fromInt 100]
+        OFF a -> [fromInt 0x80, fromInt (72 + a), fromInt 100]
 
-data Meta = 
-    Tempo 
-    | TimeSig 
-    | KeySig 
+data Meta =
+    Tempo
+    | TimeSig
+    | KeySig
     | EOT
 
 meta :: Meta -> [Word8]
-meta m = 
+meta m =
     case m of
         Tempo -> [0xFF, 0x51, 0x03, 0x07, 0xa1, 0x20]
-        TimeSig -> [0xFF, 0x58, 0x04, 0x04, 0x02, 0x18, 0x08] 
-        KeySig -> [0xFF, 0x59, 0x02, 0x00, 0x00] 
+        TimeSig -> [0xFF, 0x58, 0x04, 0x04, 0x02, 0x18, 0x08]
+        KeySig -> [0xFF, 0x59, 0x02, 0x00, 0x00]
         EOT -> [0xFF, 0x2F, 0x00]
 
 testMidi :: [Word8]
 testMidi = concatMap (event 0) [meta Tempo, meta TimeSig, meta KeySig]
-            ++ event 0 (note $ ON 1)
-            ++ event 4 (note $ OFF 1)
-            ++ event 5 (meta EOT)
+            ++ event 4 (note $ ON 1)
+            ++ event 16 (note $ OFF 1)
+            ++ event 100 (meta EOT)
