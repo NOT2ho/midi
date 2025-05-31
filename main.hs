@@ -19,6 +19,18 @@ main = do
     saveMidi (path ++ "c1.midi") chord12'
     saveMidi (path ++ "c2.midi") chord12''
     saveMidi (path ++ "c3.midi") chord12'''
+    saveMidi (path ++ "g2.midi") (gcdnChord12 2)
+    saveMidi (path ++ "g3.midi") (gcdnChord12 3)
+    saveMidi (path ++ "g4.midi") (gcdnChord12 4)
+    saveMidi (path ++ "g5.midi") (gcdnChord12 5)
+    saveMidi (path ++ "g6.midi") (gcdnChord12 6)
+    saveMidi (path ++ "g7.midi") (gcdnChord12 7)
+    saveMidi (path ++ "sg2.midi") (subgcdnChord12 2)
+    saveMidi (path ++ "sg3.midi") (subgcdnChord12 3)
+    saveMidi (path ++ "sg4.midi") (subgcdnChord12 4)
+    saveMidi (path ++ "sg5.midi") (subgcdnChord12 5)
+    saveMidi (path ++ "sg6.midi") (subgcdnChord12 6)
+    saveMidi (path ++ "sg7.midi") (subgcdnChord12 7)
 
 saveMidi :: String -> [Word8] -> IO ()
 saveMidi s w = midiFileIO s w (\h -> B.hPut h (B.pack w))
@@ -170,6 +182,32 @@ vlq i = let b = toWord28be $ fromIntegral i in
             0 -> [0]
             1 -> b'
             _ -> map (.|. 0b10000000) (init b') ++ [last b']
+
+gcds :: [Int] -> Int
+gcds l = 
+    if l == [] then 0 else foldl1 gcd l
+
+subgcds :: [Int] -> Int 
+subgcds l = gcds $ zipWith (-) l (drop 1 l)
+
+gcdFilter :: [[Int]] -> Int -> [[Int]]
+gcdFilter l i = filter (\x -> gcds x == i) l
+
+subgcdFilter :: [[Int]] -> Int -> [[Int]]
+subgcdFilter l i = filter (\x -> subgcds x == i) l
+
+
+gcdnChord12 :: Int -> [Word8]
+gcdnChord12 n = let l = sorted 11
+        in concatMap (event 0) [meta Tempo, meta TimeSig, meta KeySig]
+        ++ concatMap chordNote (gcdFilter l n)
+        ++ event 0 (meta EOT)
+
+subgcdnChord12 :: Int -> [Word8]
+subgcdnChord12 n = let l = sorted 11
+        in concatMap (event 0) [meta Tempo, meta TimeSig, meta KeySig]
+        ++ concatMap chordNote (subgcdFilter l n)
+        ++ event 0 (meta EOT)
 
 
 event :: Int -> [Word8] -> [Word8]
