@@ -9,12 +9,16 @@ import System.IO
 import Control.Monad.IO.Class
 
 main :: IO ()
-main = do 
+main = do
     let path = "/"
     saveMidi (path ++ "0.midi") permutative12
     saveMidi (path ++ "1.midi") permutative12'
     saveMidi (path ++ "2.midi") permutative12''
     saveMidi (path ++ "3.midi") permutative12'''
+    saveMidi (path ++ "c0.midi") chord12
+    saveMidi (path ++ "c1.midi") chord12'
+    saveMidi (path ++ "c2.midi") chord12''
+    saveMidi (path ++ "c3.midi") chord12'''
 
 saveMidi :: String -> [Word8] -> IO ()
 saveMidi s w = midiFileIO s w (\h -> B.hPut h (B.pack w))
@@ -95,11 +99,42 @@ permutativeMidi i =
 createNote :: Int -> Int -> [Word8]
 createNote l i = event l (note $ ON i) ++ event (l+1) (note $ OFF i)
 
+chordNote :: [Int] -> [Word8]
+chordNote (i:is) = event 4 (note $ ON i) ++ concatMap (event 0 . note . ON) is
+            ++ event 4 (note $ OFF i) ++ concatMap (event 0 . note . OFF) is
+
 sorted :: Int -> [[Int]]
 sorted i = sortOn length $ subsequences [0..i]
 
 byLength :: [[Int]] -> [[Int]]
 byLength l = drop 2 $  foldl1 (++) `map` groupBy (\a b -> length a == length b ) l
+
+byLength' :: [[Int]] -> [[[Int]]]
+byLength' l=  drop 2  (groupBy (\a b -> length a == length b ) l)
+
+chord12 :: [Word8]
+chord12 = let [a,b,c,d,e,f,g,h,j,k,l] = byLength' $ sorted 11
+        in concatMap (event 0) [meta Tempo, meta TimeSig, meta KeySig]
+        ++ concatMap chordNote (concat [a,b,c])
+        ++ event 0 (meta EOT)
+
+chord12' :: [Word8]
+chord12' = let [a,b,c,d,e,f,g,h,j,k,l] = byLength' $ sorted 11
+        in concatMap (event 0) [meta Tempo, meta TimeSig, meta KeySig]
+        ++ concatMap chordNote (concat [d,e])
+        ++ event 0 (meta EOT)
+
+chord12'' :: [Word8]
+chord12'' = let [a,b,c,d,e,f,g,h,j,k,l] = byLength' $ sorted 11
+        in concatMap (event 0) [meta Tempo, meta TimeSig, meta KeySig]
+        ++ concatMap chordNote (concat [f,g])
+        ++ event 0 (meta EOT)
+
+chord12''' :: [Word8]
+chord12''' = let [a,b,c,d,e,f,g,h,j,k,l] = byLength' $ sorted 11
+        in concatMap (event 0) [meta Tempo, meta TimeSig, meta KeySig]
+        ++ concatMap chordNote (concat [h,j,k,l])
+        ++ event 0 (meta EOT)
 
 permutative12 :: [Word8]
 permutative12 = let [a,b,c,d,e,f,g,h,j,k,l] = byLength $ sorted 11
